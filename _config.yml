@@ -5,10 +5,7 @@ minima:
   skin: classic
 show_excerpts: true
 
-author:
-  name: Gustavo de Morais
-  email: gustavopguto@gmail.com
-
+author: Gustavo de Morais
 email: gustavopguto@gmail.com
 github_username: gustavodemorais
 linkedin_username: gustavo-demorais
