@@ -4,3 +4,16 @@ theme: minima
 minima:
   skin: classic
 show_excerpts: true
+
+author:
+  name: Gustavo de Morais
+  email: gustavopguto@gmail.com
+
+email: gustavopguto@gmail.com
+github_username: gustavodemorais
+linkedin_username: gustavo-demorais
+
+plugins:
+  - jekyll-feed
+  - jekyll-seo-tag
+  - jekyll-sitemap
