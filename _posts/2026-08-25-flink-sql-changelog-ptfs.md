@@ -8,17 +8,24 @@ Hey all 👋 I'm Gustavo de Morais, an Apache Flink committer. I recently design
 
 This is brand new functionality for things that just weren't possible in Flink SQL before, so I thought it was worth a blog post - my first one after intensively contributing to Open Source Apache Flink for almost 2 years, inspired by [Robin Moffat](https://rmoff.net/) :)
 
+**In this post:**
+
+- [What are changelogs and what is CDC?](#changelogs-and-cdc)
+- [TO_CHANGELOG and FROM_CHANGELOG](#to-and-from-changelog)
+- [Common use cases](#common-use-cases)
+- [What's still missing](#whats-still-missing)
+
 ## Is this for you?
 
 If you're doing any CDC processing, moving data between systems, or you've ever hit a corner of Flink where you knew exactly what you wanted and Flink just wouldn't let you do it (for example, you've seen this lovely message: <code style="color:red">Can't generate a valid execution plan for the given query:</code>), keep reading. If you have no idea about what changelogs are, ~~good for you~~ there are some small examples which I hope will help!
 
 [small diagram of the round trip: raw changelog -> FROM_CHANGELOG -> Flink table -> TO_CHANGELOG -> changelog back out]
 
-## What are changelogs and what is CDC?
+## What are changelogs and what is CDC? {#changelogs-and-cdc}
 
 CDC stands for Change Data Capture: instead of just storing the current state of a database, you capture every insert, update, and delete that happens to it as a stream of events, so other systems can react to changes as they happen instead of polling for them. A changelog is just what that stream of events looks like on the wire.
 
-When you create a table in Flink SQL, it ends up with one of three changelog modes:
+When you create a table in Flink SQL, it ends up with one of three changelog modes (see the [Flink docs on changelog modes](https://github.com/apache/flink/blob/master/docs/content/docs/sql/reference/queries/changelog.md) for the full reference):
 
 - **Append**: only inserts (`+I`)
 - **Retract**: inserts, plus updates split into an old image and a new image (`-U`, `+U`), plus deletes (`-D`)
@@ -57,7 +64,7 @@ Both streams look nothing alike on the wire, but they land on the exact same tab
 
 That's the core of the problem: three modes, and every CDC tool, format, and connector out there has its own opinion about which one it speaks and how. Debezium, DynamoDB Streams, a custom event you built yourself - they all encode inserts/updates/deletes differently, and until now Flink only understood the ones it had a connector for.
 
-## The new swiss army knife: TO_CHANGELOG and FROM_CHANGELOG
+## The new swiss army knife: TO_CHANGELOG and FROM_CHANGELOG {#to-and-from-changelog}
 
 Two new dangerous but powerful built-in functions, and for the first time in Flink SQL:
 
@@ -133,7 +140,7 @@ SELECT * FROM TO_CHANGELOG(
 - `op_mapping` here only forwards the row kinds you list - anything you leave out gets dropped, which is a handy way to filter.
 - `produces_full_deletes` controls whether a `DELETE` row carries every column (the default) or just the key, with everything else `null`. Turning it off skips a stateful step, but only makes sense once you have a key to fall back on (`PARTITION BY`, or a declared upsert key).
 
-## Common use cases
+## Common use cases {#common-use-cases}
 
 ### Writing an aggregation to an append-only sink
 
@@ -232,7 +239,7 @@ Same result, one pipeline instead of two.
 
 There are more creative uses out there. If you've found one, I'd love to hear about it - send me an <a href="&#109;&#97;&#105;&#108;&#116;&#111;&#58;&#103;&#117;&#115;&#116;&#97;&#118;&#111;&#112;&#103;&#117;&#116;&#111;&#64;&#103;&#109;&#97;&#105;&#108;&#46;&#99;&#111;&#109;">email</a> or a message on [LinkedIn](https://www.linkedin.com/in/gustavo-demorais/).
 
-## What's still missing
+## What's still missing {#whats-still-missing}
 
 So, we're almost at the end. Now, the FLIP is only partially implemented. Anything that needs turning one event into several, or several into one, isn't supported yet - for example, a CDC format that packs both the old and new image into a single message. `FROM_CHANGELOG` maps one input row to exactly one output row, so it can't split that message into an `UPDATE_BEFORE`/`UPDATE_AFTER` pair on its own. You can usually work around this upstream with a Kafka Connect single message transform (SMT) - the same idea Debezium uses to unwrap or filter events before they hit the topic.
 
