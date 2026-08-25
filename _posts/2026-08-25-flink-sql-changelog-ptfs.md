@@ -16,6 +16,8 @@ If you're doing any CDC processing, moving data between systems, or you've ever 
 
 ## What are changelogs and what is CDC?
 
+CDC stands for Change Data Capture: instead of just storing the current state of a database, you capture every insert, update, and delete that happens to it as a stream of events, so other systems can react to changes as they happen instead of polling for them. A changelog is just what that stream of events looks like on the wire.
+
 When you create a table in Flink SQL, it ends up with one of three changelog modes:
 
 - **Append**: only inserts (`+I`)
@@ -135,8 +137,6 @@ SELECT * FROM TO_CHANGELOG(
 
 ### Writing an aggregation to an append-only sink
 
-> This one comes from Stephen Mork, Solutions Architect at Confluent
-
 Any `GROUP BY` aggregation over a stream produces a retract table - Flink has to be able to update the result for a key when a new row for that key shows up. An append-only sink won't take that.
 
 ```sql
@@ -170,7 +170,7 @@ Now you get the previous status of an order on every change, something that simp
 
 ### Converting a custom CDC format
 
-> This one comes from Martijn Visser, ~~the do-it-all machine~~ Product Management Director at Confluent - when he first brought it up, I didn't think it was actually supported yet. Turns out it is.
+> This one comes from Martijn Visser, ~~the Swiss Army knife of PMs lol~~ Product Management Director at Confluent - when he first brought it up, I didn't think it was actually supported yet. Turns out it is.
 
 DynamoDB Streams has no Table API/SQL connector, and its events don't look anything like Flink's row kinds - they carry an `eventName` of `INSERT`, `MODIFY`, or `REMOVE`. There is a DataStream connector, but it just hands you raw records; you're still on your own to write custom deserialization code to get any kind of CDC semantics out of it. `FROM_CHANGELOG` gets you there in plain SQL instead:
 
@@ -230,7 +230,7 @@ FROM FROM_CHANGELOG(
 
 Same result, one pipeline instead of two.
 
-There are more creative uses out there. If you've found one, I'd love to hear about it - send me an email or a message on LinkedIn.
+There are more creative uses out there. If you've found one, I'd love to hear about it - send me an <a href="&#109;&#97;&#105;&#108;&#116;&#111;&#58;&#103;&#117;&#115;&#116;&#97;&#118;&#111;&#112;&#103;&#117;&#116;&#111;&#64;&#103;&#109;&#97;&#105;&#108;&#46;&#99;&#111;&#109;">email</a> or a message on [LinkedIn](https://www.linkedin.com/in/gustavo-demorais/).
 
 ## What's still missing
 
@@ -242,4 +242,4 @@ One more thing worth being upfront about: Flink 2.3 itself ships with very limit
 
 ## That's it for today
 
-I think that's it for a general overview of what these two boys will be messing with. By the way, if you asked yourself why these are not regular built-in functions but Process Table Functions: well, these functions are extra powerful because they need to interact and use elements from the engine that a regular built-in function isn't allowed to. Btw, these are the first ever released built-in Process Table Functions for Flink. Which is in itself a pretty exciting feature you should look into if you don't know yet. Spoiler: if you didn't like my functions, you can write your own version of them ;) Check it out at https://nightlies.apache.org/flink/flink-docs-stable/docs/dev/table/functions/ptfs/
+I think that's it for a general overview of what these two trouble-makers ~~underrated heroes~~ will be messing with. By the way, if you asked yourself why these are not regular built-in functions but Process Table Functions: well, these functions are extra powerful because they need to interact and use elements from the engine that a regular built-in function isn't allowed to. Btw, these are the first ever released built-in Process Table Functions for Flink. Which is in itself a pretty exciting feature you should look into if you don't know yet. Spoiler: if you didn't like my functions, you can write your own version of them ;) Check it out [here](https://nightlies.apache.org/flink/flink-docs-stable/docs/dev/table/functions/ptfs/).
