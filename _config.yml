@@ -1,0 +1,6 @@
+title: Gustavo de Morais
+description: Notes on Apache Flink, streaming SQL, and other engineering things.
+theme: minima
+minima:
+  skin: classic
+show_excerpts: true
