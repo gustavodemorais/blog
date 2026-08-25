@@ -1,12 +1,14 @@
 ---
 layout: post
-title: "Flink SQL Evolution: Handling Custom CDC with FROM_CHANGELOG and TO_CHANGELOG Process Table Functions"
+title: "Flink SQL Evolution: Handling Custom CDC with FROM_CHANGELOG and TO_CHANGELOG"
 date: 2026-08-25
 ---
 
-Hey all 👋 I'm Gustavo de Morais, an Apache Flink committer. I recently designed and released [FLIP-564: Support FROM_CHANGELOG and TO_CHANGELOG built-in PTFs](https://cwiki.apache.org/confluence/display/FLINK/FLIP-564%3A+Support+FROM_CHANGELOG+and+TO_CHANGELOG+built-in+PTFs). (Shoutout also to Ramin Gharib, who contributed with some clean PRs during development!).
+Hey all 👋 I'm Gustavo de Morais, an Apache Flink committer. I recently designed and released [FLIP-564: Support FROM_CHANGELOG and TO_CHANGELOG built-in PTFs](https://cwiki.apache.org/confluence/display/FLINK/FLIP-564%3A+Support+FROM_CHANGELOG+and+TO_CHANGELOG+built-in+PTFs). This is brand new functionality for things that just weren't possible in Flink SQL before.
 
-This is brand new functionality for things that just weren't possible in Flink SQL before, so I thought it was worth a blog post - my first one after intensively contributing to Open Source Apache Flink for almost 2 years, inspired by [Robin Moffat](https://rmoff.net/) :)
+That said, I thought it was worth a blog post - my first one after intensively contributing to Open Source Apache Flink for almost 2 years, inspired by [Robin Moffat](https://rmoff.net/) :)
+
+> Before we start, shoutout to Ramin Gharib, who contributed with some clean PRs during development!
 
 **In this post:**
 
