@@ -8,7 +8,7 @@ Hey all 👋 I'm Gustavo de Morais, an Apache Flink committer. I recently design
 
 That said, I thought it was worth a blog post - my first one after intensively contributing to Open Source Apache Flink for almost 2 years, inspired by [Robin Moffat](https://rmoff.net/) :)
 
-> Before we start, shoutout to Ramin Gharib, who contributed with some clean PRs during development!
+> Before we start, shoutout to [Ramin Gharib](https://github.com/raminqaf), who contributed with some clean PRs during development!
 
 **In this post:**
 
@@ -146,7 +146,7 @@ SELECT * FROM TO_CHANGELOG(
 
 ### Writing an aggregation to an append-only sink
 
-Any `GROUP BY` aggregation over a stream produces a retract table - Flink has to be able to update the result for a key when a new row for that key shows up. An append-only sink won't take that.
+Any `GROUP BY` aggregation over a stream produces an updating table - Flink has to be able to update the result for a key when a new row for that key shows up. An append-only sink won't take that.
 
 ```sql
 CREATE VIEW totals AS
@@ -160,9 +160,30 @@ SELECT * FROM TO_CHANGELOG(input => TABLE totals);
 
 `TO_CHANGELOG` flattens the retract output into inserts with an explicit `op` column, so the append-only sink can take it.
 
-### Using LAG on an updating stream
+### Deduplicating records without watermarks
 
-`LAG` over an `OVER` window expects append-only input. An updating view doesn't qualify, so Flink refuses to plan it. `TO_CHANGELOG` fixes that by turning the updates into explicit inserts first:
+> This one comes from David Anderson, Principal Software Practice Lead
+
+Flink only trusts a dedup's `ROW_NUMBER()` winner as final once it's ordered by a watermarked time attribute. Order by anything else, and the planner keeps the result updating - even when the winner can never actually change, like with exact duplicates:
+
+```sql
+SELECT * FROM TO_CHANGELOG((
+    SELECT trade_id, ticker, quantity, price
+    FROM (
+        SELECT *, ROW_NUMBER()
+            OVER (PARTITION BY trade_id, ticker, quantity, price
+                  ORDER BY trade_id, ticker, quantity, price ASC) AS row_num
+        FROM trades_with_dups
+    )
+    WHERE row_num = 1
+));
+```
+
+Now dedup is append-only and deterministic, no event time or watermarks involved at all - just keep in mind this holds for true exact duplicates. This is common after Flink jobs reprocess and leave exact duplicates in the sink.
+
+### Using an append-only built-in function on an updating stream
+
+Let's take LAG as an example: it's a function that gives you the previous row's value, but only accepts append-only tables. An updating view doesn't qualify, so Flink refuses to plan it. `TO_CHANGELOG` fixes that by turning the updates into explicit inserts first:
 
 ```sql
 CREATE VIEW orders_changelog AS
