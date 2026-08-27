@@ -23,7 +23,12 @@ Flink gets used for a lot of different things, and it works well for most of the
 
 `TO_CHANGELOG` and `FROM_CHANGELOG` are new built-in tools that fill exactly those gaps. Here is a general diagram of how the functions could be used to connect two systems with different changelogs:
 
-![The round trip: a raw changelog goes through FROM_CHANGELOG into a Flink table, then through TO_CHANGELOG back into a changelog](/blog/assets/images/changelog-ptfs-roundtrip.png)
+<a href="#lightbox-roundtrip">
+  <img src="/blog/assets/images/changelog-ptfs-roundtrip.png" alt="The round trip: a raw changelog goes through FROM_CHANGELOG into a Flink table, then through TO_CHANGELOG back into a changelog">
+</a>
+<a href="#_" id="lightbox-roundtrip" class="lightbox-overlay">
+  <img src="/blog/assets/images/changelog-ptfs-roundtrip.png" alt="The round trip: a raw changelog goes through FROM_CHANGELOG into a Flink table, then through TO_CHANGELOG back into a changelog">
+</a>
 
 Using the functions sounds simple, right? Making this reliable, scalable, and efficient across billions of records between two systems isn't. That's what Flink takes care of under the hood - let's just focus on the functions and changelogs here.
 
