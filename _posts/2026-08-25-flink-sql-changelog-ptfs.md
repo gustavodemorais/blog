@@ -4,7 +4,7 @@ title: "Flink SQL Evolution: Handling Custom CDC with FROM_CHANGELOG and TO_CHAN
 date: 2026-08-25
 ---
 
-Hey all 👋 I'm Gustavo de Morais, an Apache Flink committer. I recently designed and released [FLIP-564: Support FROM_CHANGELOG and TO_CHANGELOG built-in PTFs](https://cwiki.apache.org/confluence/display/FLINK/FLIP-564%3A+Support+FROM_CHANGELOG+and+TO_CHANGELOG+built-in+PTFs). This is brand new functionality for things that just weren't possible in Flink SQL before.
+Hey all 👋 I'm Gustavo de Morais, an Apache Flink committer. I recently authored and released [FLIP-564: Support FROM_CHANGELOG and TO_CHANGELOG built-in PTFs](https://cwiki.apache.org/confluence/display/FLINK/FLIP-564%3A+Support+FROM_CHANGELOG+and+TO_CHANGELOG+built-in+PTFs). This is brand new functionality for things that just weren't possible in Flink SQL before.
 
 That said, I thought it was worth a blog post - my first one after intensively contributing to Open Source Apache Flink for almost 2 years, inspired by [Robin Moffat](https://rmoff.net/) :)
 
@@ -14,7 +14,7 @@ That said, I thought it was worth a blog post - my first one after intensively c
 
 - [What are changelogs and what is CDC?](#changelogs-and-cdc)
 - [What are TO_CHANGELOG and FROM_CHANGELOG?](#to-and-from-changelog)
-- [Unblocked Use Cases](#common-use-cases)
+- [Unblocked Use Cases!](#common-use-cases)
 - [What's missing?](#whats-still-missing)
 
 ## Why is this important?
