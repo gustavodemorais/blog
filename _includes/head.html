@@ -6,6 +6,9 @@
   <link rel="stylesheet" href="{{ "/assets/main.css" | relative_url }}">
   <link rel="icon" type="image/x-icon" href="{{ "/favicon.ico" | relative_url }}">
   {%- feed_meta -%}
+  <!-- Cloudflare Web Analytics -->
+  <script type='module' src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "11c5094d44d746d28f389bb280673a85"}'></script>
+  <!-- End Cloudflare Web Analytics -->
   {%- if jekyll.environment == 'production' and site.google_analytics -%}
     {%- include google-analytics.html -%}
   {%- endif -%}
