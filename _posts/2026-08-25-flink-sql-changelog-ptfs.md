@@ -23,7 +23,9 @@ If you're doing any CDC processing, moving data between systems, or you've ever 
 
 If you have no idea about what changelogs are, ~~good for you~~ there are some small examples which I hope will help! They are pretty interesting and something you might want to hear about - they're behind a lot of scalable systems and databases you know (MySQL, Postgres, Kafka Streams and the list is long).
 
-![The round trip: a raw changelog goes through FROM_CHANGELOG into a Flink table, then through TO_CHANGELOG back into a changelog]({{ "/assets/images/changelog-ptfs-roundtrip.png" | relative_url }})
+Here is a general diagram of how the functions could be used to connect two systems with different changelogs:
+
+![The round trip: a raw changelog goes through FROM_CHANGELOG into a Flink table, then through TO_CHANGELOG back into a changelog](/assets/images/changelog-ptfs-roundtrip.png)
 
 ## What are changelogs and what is CDC? {#changelogs-and-cdc}
 
