@@ -19,7 +19,7 @@ That said, I thought it was worth a blog post - my first one after intensively c
 
 ## Why is this important?
 
-Flink gets used for a lot of different things, and it works well for most of them, but there are still some gaps here and there. Let's take data replication, one of the most common use cases: it works great today for a set of supported formats. But if your database or service outputs events in another format, the only escape hatch is writing custom code in Flink SQL. There are also cases where Flink already picks an internal changelog format (append, upsert, retract) for you, and you just want a bit more control that.
+Flink gets used for a lot of different things, and it works well for most of them, but there are still some gaps here and there. Let's take data replication, one of the most common use cases: it works great today for a set of supported formats. But if your database or service outputs events in another format, the only escape hatch today is writing custom code in the Flink SQL world. There are also cases where Flink already picks an internal changelog format while doing some operations (append, upsert, retract) for you, and you just want a bit more control over that.
 
 `TO_CHANGELOG` and `FROM_CHANGELOG` are new built-in tools that fill exactly those gaps. Here is a general diagram of how the functions could be used to connect two systems with different changelogs:
 
