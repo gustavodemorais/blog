@@ -13,21 +13,23 @@ That said, I thought it was worth a blog post - my first one after intensively c
 **In this post:**
 
 - [What are changelogs and what is CDC?](#changelogs-and-cdc)
-- [TO_CHANGELOG and FROM_CHANGELOG](#to-and-from-changelog)
-- [Common use cases](#common-use-cases)
-- [What's still missing](#whats-still-missing)
+- [What are TO_CHANGELOG and FROM_CHANGELOG?](#to-and-from-changelog)
+- [Unblocked Use Cases](#common-use-cases)
+- [What's missing?](#whats-still-missing)
 
-## Is this for you?
+## Why is this important?
 
-If you're doing any CDC processing, moving data between systems, or you've ever hit a corner of Flink where you knew exactly what you wanted and Flink just wouldn't let you do it (for example, you've seen this lovely message: <code style="color:red">Can't generate a valid execution plan for the given query:</code>), keep reading. 
+Flink gets used for a lot of different things, and it works well for most of them, but there are still some gaps here and there. Let's take data replication, one of the most common use cases: it works great today for a set of supported formats. But if your database or service outputs events in another format, the only escape hatch is writing custom code in Flink SQL. There are also cases where Flink already picks an internal changelog format (append, upsert, retract) for you, and you just want a bit more control that.
 
-If you have no idea about what changelogs are, ~~good for you~~ there are some small examples which I hope will help! They are pretty interesting and something you might want to hear about - they're behind a lot of scalable systems and databases you know (MySQL, Postgres, Kafka Streams and the list is long).
+`TO_CHANGELOG` and `FROM_CHANGELOG` are new built-in tools that fill exactly those gaps. Here is a general diagram of how the functions could be used to connect two systems with different changelogs:
 
-Here is a general diagram of how the functions could be used to connect two systems with different changelogs:
+![The round trip: a raw changelog goes through FROM_CHANGELOG into a Flink table, then through TO_CHANGELOG back into a changelog](/blog/assets/images/changelog-ptfs-roundtrip.png)
 
-![The round trip: a raw changelog goes through FROM_CHANGELOG into a Flink table, then through TO_CHANGELOG back into a changelog](/assets/images/changelog-ptfs-roundtrip.png)
+Using the functions sounds simple, right? Making this reliable, scalable, and efficient across billions of records between two systems isn't. That's what Flink takes care of under the hood - let's just focus on the functions and changelogs here.
 
 ## What are changelogs and what is CDC? {#changelogs-and-cdc}
+
+If you have no idea about what changelogs are, ~~good for you~~ there are some small examples which I hope will help! They are pretty interesting and something you might want to hear about - they're behind a lot of scalable systems and databases you know (MySQL, Postgres, Kafka Streams and the list is long).
 
 CDC stands for Change Data Capture: instead of just storing the current state of a database, you capture every insert, update, and delete that happens to it as a stream of events, so other systems can react to changes as they happen instead of polling for them. A changelog is just what that series of events looks like.
 
@@ -40,37 +42,37 @@ When you create a table in Flink SQL, it ends up with one of three changelog mod
 Say an order gets created, then its status changes, then it gets deleted. In retract mode that's:
 
 ```
-+I[order: 42, status: NEW]
--U[order: 42, status: NEW]
-+U[order: 42, status: SHIPPED]
-+I[order: 43, status: NEW]
--D[order: 42, status: SHIPPED]
++I[order: 1, status: NEW]
+-U[order: 1, status: NEW]
++U[order: 1, status: SHIPPED]
++I[order: 2, status: NEW] -> Second new unrelated order
+-D[order: 1, status: SHIPPED] -> First order deletion event
 ```
 
 ```
-Table, what you see:
-order: 43, status: NEW
+Final table, you only see the second order:
+order: 2, status: NEW
 ```
 
-In upsert mode (order id as key), it's shorter:
+In upsert mode (order id as key), same changes are shorter:
 
 ```
-+I[order: 42, status: NEW]
-+U[order: 42, status: SHIPPED]
-+I[order: 43, status: NEW]
--D[order: 42, status: SHIPPED]
++I[order: 1, status: NEW]
++U[order: 1, status: SHIPPED]
++I[order: 2, status: NEW]
+-D[order: 1, status: SHIPPED] -> First order deletion event
 ```
 
 ```
 Table, what you see
-order: 43, status: NEW
+order: 2, status: NEW
 ```
 
-Both streams look different, but they land on the exact same table. That's really all a changelog is: an encoding of how a table got to where it is. The table is the actual information; the changelog is just one of several ways to say it out loud. And in append mode, things are easier and every event is a new row, there are no updates. You just append things on top of each other and this is your table. Append can "express less". However, append is also the cheapest mode of all since it's a raw lag of messages. In general, append pipelines are the most scalable and efficient ones. But yeah, each mode has its use cases.
+Both streams look different, but they land on the exact same table. That's really all a changelog is: an encoding of how a table got to where it is. The table is the actual information; the changelog is just one of several ways to say it out loud. And in append mode, things are easier and every event is a new row, there are no updates. You just append things on top of each other and this is your table. Append can "express less". However, append is also the cheapest mode of all since it's a raw log of messages. In general, append pipelines are the most scalable and efficient ones. But yeah, each mode has its use cases.
 
 That's the core of the problem: three modes, and every CDC tool, format, and connector out there has its own opinion about which one it speaks and how. MySQL's binlog, Debezium, DynamoDB Streams, a custom event you built yourself - they all encode inserts/updates/deletes differently, and until now Flink only understood the ones it had a connector for.
 
-## The new swiss army knife: TO_CHANGELOG and FROM_CHANGELOG {#to-and-from-changelog}
+## What are TO_CHANGELOG and FROM_CHANGELOG? {#to-and-from-changelog}
 
 Two new dangerous but powerful built-in functions, and for the first time in Flink SQL:
 
@@ -132,7 +134,7 @@ Now you may ask me, why are they dangerous, Gustavo? Well, let's say you can bre
 I think they solve problems in two distinct major areas. Disclaimer, this is my personal opinion:
 
 1. **Reading and writing CDC in a format Flink doesn't have a connector for.** No custom deserializer to write, no waiting on a connector - just describe your operation column in SQL.
-2. **Working around planner limitations.** Just as an example, some operators, like `LAG` over an `OVER` window, only accept certain changelog modes as input. `TO_CHANGELOG` lets you explicitly flatten an updating stream into something they can consume - which, not coincidentally, is exactly what produces that <code style="color:red">Can't generate a valid execution plan for the given query:</code> error from the top of this post if you skip it.
+2. **Working around planner limitations.** Just as an example, some operators, like `LAG` over an `OVER` window, only accept certain changelog modes as input. `TO_CHANGELOG` lets you explicitly flatten an updating stream into something they can consume - which, not coincidentally, is exactly what produces <code style="color:red">Can't generate a valid execution plan for the given query:</code>.
 
 Obs.: A lot of times the error message means your query is broken and not the engine!
 
@@ -158,7 +160,7 @@ SELECT * FROM TO_CHANGELOG(
 )
 ```
 
-## Common use cases {#common-use-cases}
+## Unblocked Use Cases {#common-use-cases}
 
 ### Writing an aggregation to an append-only sink
 
@@ -278,7 +280,7 @@ Same result, one pipeline instead of two.
 
 There are more creative uses out there. If you've found one, I'd love to hear about it - send me an <a href="&#109;&#97;&#105;&#108;&#116;&#111;&#58;&#103;&#117;&#115;&#116;&#97;&#118;&#111;&#112;&#103;&#117;&#116;&#111;&#64;&#103;&#109;&#97;&#105;&#108;&#46;&#99;&#111;&#109;">email</a> or a message on [LinkedIn](https://www.linkedin.com/in/gustavo-demorais/).
 
-## What's still missing {#whats-still-missing}
+## What's missing? {#whats-still-missing}
 
 So, we're almost at the end. Now, the FLIP is only partially implemented. Anything that needs turning one event into several, or several into one, isn't supported yet - for example, a CDC format that packs both the old and new image into a single message. `FROM_CHANGELOG` maps one input row to exactly one output row, so it can't split that message into an `UPDATE_BEFORE`/`UPDATE_AFTER` pair on its own. You can usually work around this upstream with a Kafka Connect single message transform (SMT) - the same idea Debezium uses to unwrap or filter events before they hit the topic.
 
