@@ -19,15 +19,17 @@ That said, I thought it was worth a blog post - my first one after intensively c
 
 ## Is this for you?
 
-If you're doing any CDC processing, moving data between systems, or you've ever hit a corner of Flink where you knew exactly what you wanted and Flink just wouldn't let you do it (for example, you've seen this lovely message: <code style="color:red">Can't generate a valid execution plan for the given query:</code>), keep reading. If you have no idea about what changelogs are, ~~good for you~~ there are some small examples which I hope will help!
+If you're doing any CDC processing, moving data between systems, or you've ever hit a corner of Flink where you knew exactly what you wanted and Flink just wouldn't let you do it (for example, you've seen this lovely message: <code style="color:red">Can't generate a valid execution plan for the given query:</code>), keep reading. 
 
-[small diagram of the round trip: raw changelog -> FROM_CHANGELOG -> Flink table -> TO_CHANGELOG -> changelog back out]
+If you have no idea about what changelogs are, ~~good for you~~ there are some small examples which I hope will help! They are pretty interesting and something you might want to hear about - they're behind a lot of scalable systems and databases you know (MySQL, Postgres, Kafka Streams and the list is long).
+
+![The round trip: a raw changelog goes through FROM_CHANGELOG into a Flink table, then through TO_CHANGELOG back into a changelog]({{ "/assets/images/changelog-ptfs-roundtrip.png" | relative_url }})
 
 ## What are changelogs and what is CDC? {#changelogs-and-cdc}
 
-CDC stands for Change Data Capture: instead of just storing the current state of a database, you capture every insert, update, and delete that happens to it as a stream of events, so other systems can react to changes as they happen instead of polling for them. A changelog is just what that stream of events looks like on the wire.
+CDC stands for Change Data Capture: instead of just storing the current state of a database, you capture every insert, update, and delete that happens to it as a stream of events, so other systems can react to changes as they happen instead of polling for them. A changelog is just what that series of events looks like.
 
-When you create a table in Flink SQL, it ends up with one of three changelog modes (see the [Flink docs on changelog modes](https://github.com/apache/flink/blob/master/docs/content/docs/sql/reference/queries/changelog.md) for the full reference):
+When you create a table in Flink SQL, it ends up with one of three changelog modes:
 
 - **Append**: only inserts (`+I`)
 - **Retract**: inserts, plus updates split into an old image and a new image (`-U`, `+U`), plus deletes (`-D`)
@@ -44,7 +46,7 @@ Say an order gets created, then its status changes, then it gets deleted. In ret
 ```
 
 ```
-Table
+Table, what you see:
 order: 43, status: NEW
 ```
 
@@ -58,13 +60,13 @@ In upsert mode (order id as key), it's shorter:
 ```
 
 ```
-Table
+Table, what you see
 order: 43, status: NEW
 ```
 
-Both streams look nothing alike on the wire, but they land on the exact same table. That's really all a changelog is: an encoding of how a table got to where it is. The table is the actual information; the changelog is just one of several ways to say it out loud. And in append mode, you can't say it at all - there's no way to represent a delete, so this whole scenario can't be expressed. However, append is also the cheapest mode of all since it's a raw lag of messages. In general, append pipelines are the most scalable and efficient ones. But yeah, each mode has its use cases.
+Both streams look different, but they land on the exact same table. That's really all a changelog is: an encoding of how a table got to where it is. The table is the actual information; the changelog is just one of several ways to say it out loud. And in append mode, things are easier and every event is a new row, there are no updates. You just append things on top of each other and this is your table. Append can "express less". However, append is also the cheapest mode of all since it's a raw lag of messages. In general, append pipelines are the most scalable and efficient ones. But yeah, each mode has its use cases.
 
-That's the core of the problem: three modes, and every CDC tool, format, and connector out there has its own opinion about which one it speaks and how. Debezium, DynamoDB Streams, a custom event you built yourself - they all encode inserts/updates/deletes differently, and until now Flink only understood the ones it had a connector for.
+That's the core of the problem: three modes, and every CDC tool, format, and connector out there has its own opinion about which one it speaks and how. MySQL's binlog, Debezium, DynamoDB Streams, a custom event you built yourself - they all encode inserts/updates/deletes differently, and until now Flink only understood the ones it had a connector for.
 
 ## The new swiss army knife: TO_CHANGELOG and FROM_CHANGELOG {#to-and-from-changelog}
 
@@ -81,12 +83,19 @@ SELECT * FROM TO_CHANGELOG(
 )
 ```
 
-Every row comes out as a plain insert, with an extra `op` column telling you what it originally was:
+Say `orders_per_region` currently looks like this:
 
 ```
+Table
+region: 'EU', cnt: 2
+```
+
+That single row in the table is the end result of two changes: an insert (`cnt: 1`), then an update (`cnt: 2`). `TO_CHANGELOG` hands you the changelog that led to that final table:
+
+```
+Output of TO_CHANGELOG for orders_per_region
 +I[op: 'INSERT',       region: 'EU', cnt: 1]
 +I[op: 'UPDATE_AFTER',  region: 'EU', cnt: 2]
-+I[op: 'DELETE',       region: 'EU', cnt: 1]
 ```
 
 ### FROM_CHANGELOG
@@ -97,24 +106,37 @@ SELECT * FROM FROM_CHANGELOG(
 )
 ```
 
-Same idea in reverse: read an append-only stream that carries its own operation code, and get back a proper updating Flink table. If you write the result to Kafka through an upsert sink, the deletes come out as real Kafka tombstones, not just rows with an `op` column saying "delete".
+Now go the other way. Say you have a `raw_cdc` Kafka topic coming from whichever system or database. For simplicity, we'll use the same example as above.
 
-Here's the thing I keep coming back to: in Flink, a plain append event has no way to say "delete this downstream." Only an upsert table can turn into a real Kafka tombstone. `FROM_CHANGELOG` is how you get there even when your source never called itself upsert in the first place.
+```
+raw_cdc
++I[op: 'INSERT',       region: 'EU', cnt: 1]
++I[op: 'UPDATE_AFTER',  region: 'EU', cnt: 2]
+```
 
-Now you may ask me, why are they dangerous, Gustavo? Well, let's say you can break things in very weird ways if you configure things incorrectly here and there are multiple ways of doing that. Imagine only this extreme example, imagine what you'll get if you map INSERT to DELETE and DELETE to INSERT lol
+`FROM_CHANGELOG` reads that `op` column and turns each row into the row kind it names, landing you right back at the same Flink table:
+
+```
+Table
+region: 'EU', cnt: 2
+```
+
+That's the whole trick: nothing about the data changed, just which side is allowed to see it as a table and which side has to see it as a plain, appendable log. These new functions are just a nice, custom way of connecting the input and output of two data format worlds to unlock new use cases!
+
+Now you may ask me, why are they dangerous, Gustavo? Well, let's say you can break things in very weird ways if you configure things incorrectly here and there are multiple ways of doing that. Imagine only this extreme example: what will you get if you map INSERT to DELETE and DELETE to INSERT? 🧨
 
 ## What are they made for?
 
 I think they solve problems in two distinct major areas. Disclaimer, this is my personal opinion:
 
 1. **Reading and writing CDC in a format Flink doesn't have a connector for.** No custom deserializer to write, no waiting on a connector - just describe your operation column in SQL.
-2. **Working around planner limitations Flink still has today.** Just as an example, some operators, like `LAG` over an `OVER` window, only accept certain changelog modes as input. `TO_CHANGELOG` lets you flatten an updating stream into something they can consume - which, not coincidentally, is exactly what produces that <code style="color:red">Can't generate a valid execution plan for the given query:</code> error from the top of this post if you skip it.
+2. **Working around planner limitations.** Just as an example, some operators, like `LAG` over an `OVER` window, only accept certain changelog modes as input. `TO_CHANGELOG` lets you explicitly flatten an updating stream into something they can consume - which, not coincidentally, is exactly what produces that <code style="color:red">Can't generate a valid execution plan for the given query:</code> error from the top of this post if you skip it.
 
 Obs.: A lot of times the error message means your query is broken and not the engine!
 
 ## Full function signatures
 
-The examples above only scratched the surface - both functions take a few more arguments. Full availability lands in Flink 2.4; 2.3 ships with a more limited set.
+The examples above only scratched the surface - both functions take a few more arguments. Full availability lands in Flink 2.4; 2.3 ships with a more limited set. [Full Open Source documentation can be found here](https://github.com/apache/flink/blob/master/docs/content/docs/sql/reference/queries/changelog.md).
 
 ```sql
 SELECT * FROM FROM_CHANGELOG(
@@ -125,11 +147,6 @@ SELECT * FROM FROM_CHANGELOG(
 )
 ```
 
-- `PARTITION BY` co-locates every event for the same key on the same task, and lets you produce an upsert changelog instead of a retract one (map to `UPDATE_AFTER` without `UPDATE_BEFORE`).
-- `ORDER BY` reorders out-of-order CDC events per key by a watermarked time attribute (requires `PARTITION BY`).
-- `op_mapping` maps as many of your own codes to Flink's row kinds as you need, comma-separated codes included.
-- `error_handling` decides what happens on an op code you didn't map: fail the job (default) or skip the row.
-
 ```sql
 SELECT * FROM TO_CHANGELOG(
     input                 => TABLE source_table [PARTITION BY key_col],
@@ -138,9 +155,6 @@ SELECT * FROM TO_CHANGELOG(
     produces_full_deletes => BOOLEAN
 )
 ```
-
-- `op_mapping` here only forwards the row kinds you list - anything you leave out gets dropped, which is a handy way to filter.
-- `produces_full_deletes` controls whether a `DELETE` row carries every column (the default) or just the key, with everything else `null`. Turning it off skips a stateful step, but only makes sense once you have a key to fall back on (`PARTITION BY`, or a declared upsert key).
 
 ## Common use cases {#common-use-cases}
 
@@ -226,6 +240,8 @@ Note the `INSERT INTO items` - materialize the result into its own upsert table 
 
 > This example comes from Taku Suzuki, Solutions Architect at Confluent
 
+In Flink, a plain append event has no way to say "delete this downstream." Only an upsert table can turn into a real Kafka tombstone. `FROM_CHANGELOG` is how you get there even when your source never called itself upsert in the first place.
+
 Say you're keeping a compacted topic of current employees, keyed by employee ID. When someone leaves, you want that key physically gone downstream, not just a row with a "deleted" flag on it.
 
 Your regular inserts and updates need nothing special - a plain `INSERT INTO` an upsert-kafka table already overwrites by key. The only piece missing is deletes, so add a small side pipeline just for those:
@@ -235,7 +251,6 @@ INSERT INTO employee_state
 SELECT id, name
 FROM FROM_CHANGELOG(
     input      => TABLE (SELECT * FROM employee_events WHERE op = 'd'),
-    op         => DESCRIPTOR(op),
     op_mapping => MAP['d', 'DELETE']
 );
 ```
@@ -249,7 +264,6 @@ INSERT INTO employee_state
 SELECT id, name, op, __deleted
 FROM FROM_CHANGELOG(
     input      => TABLE employee_events PARTITION BY id,
-    op         => DESCRIPTOR(op),
     op_mapping => MAP[
         'c, r', 'INSERT',
         'u',    'UPDATE_AFTER',
@@ -268,8 +282,9 @@ So, we're almost at the end. Now, the FLIP is only partially implemented. Anythi
 
 Why did we do that? I've tried to ship core first with stateless functions. I want to see how far people get with just this before we add the extra complexity the remaining cases would need. It's easy to implement two super complex functions that do it all but I think optimally we want to keep things lean. If you want to dig into this more, send me an email or a message! I'm also giving a talk on it at Community Over Code (formerly ApacheCon) - come say hi 👋
 
-One more thing worth being upfront about: Flink 2.3 itself ships with very limited feature availability - pretty much the bare bones, retract only. Everything else I've shown above, `PARTITION BY`, upsert output, `op_mapping`, `error_handling`, `produces_full_deletes`, lands in Flink 2.4. Whether even more gets built after that is TBD. If you run into a hard blocker along the way that you can't work around, I'd genuinely like to hear about it.
+One more thing worth being upfront about: Flink 2.3 itself ships with very limited feature availability - pretty much the bare bones, retract only. Everything else I've shown above, `PARTITION BY`, upsert output, `op_mapping`, `error_handling`, `produces_full_deletes`, lands in Flink 2.4. Whether even more gets built after that is TBD. If you run into a hard blocker along the way that you can't work around, I'd be happy to hear about it.
 
 ## That's it for today
 
 I think that's it for a general overview of what these two ~~trouble-makers~~ underrated heroes will be messing with. By the way, if you asked yourself why these are not regular built-in functions but Process Table Functions: well, these functions are extra powerful because they need to interact and use elements from the engine that a regular built-in function isn't allowed to. Btw, these are the first ever released built-in Process Table Functions for Flink. Which is in itself a pretty exciting feature you should look into if you don't know yet. Spoiler: if you didn't like my functions, you can write your own version of them ;) Check it out [here](https://nightlies.apache.org/flink/flink-docs-stable/docs/dev/table/functions/ptfs/).
+
