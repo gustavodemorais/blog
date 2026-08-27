@@ -9,6 +9,18 @@
   <!-- Cloudflare Web Analytics -->
   <script type='module' src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "11c5094d44d746d28f389bb280673a85"}'></script>
   <!-- End Cloudflare Web Analytics -->
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      document.querySelectorAll('.post-content h1[id], .post-content h2[id], .post-content h3[id], .post-content h4[id], .post-content h5[id], .post-content h6[id]').forEach(function (heading) {
+        var link = document.createElement('a');
+        link.className = 'heading-anchor';
+        link.href = '#' + heading.id;
+        link.textContent = '#';
+        link.setAttribute('aria-label', 'Link to this section');
+        heading.appendChild(link);
+      });
+    });
+  </script>
   {%- if jekyll.environment == 'production' and site.google_analytics -%}
     {%- include google-analytics.html -%}
   {%- endif -%}
