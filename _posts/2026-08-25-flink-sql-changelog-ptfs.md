@@ -12,7 +12,7 @@ That said, I thought it was worth a blog post - my first one after intensively c
 
 - [What are changelogs, and what is CDC?](#changelogs-and-cdc)
 - [What are TO_CHANGELOG and FROM_CHANGELOG?](#to-and-from-changelog)
-- [Unblocked Use Cases!](#common-use-cases)
+- [What can these functions be used for?](#common-use-cases)
 - [What's missing?](#whats-still-missing)
 
 ## Why are these new changelog functions important?
@@ -84,7 +84,22 @@ Two new dangerous (see below!) but powerful built-in functions, and for the firs
 - `TO_CHANGELOG` lets you turn an updating pipeline back into an append-only one.
 - `FROM_CHANGELOG` lets you bring in a CDC format Flink has never heard of.
 
+Full parameter docs are [here](https://nightlies.apache.org/flink/flink-docs-master/docs/sql/reference/queries/changelog/) if you want to jump ahead - below is each one with its full signature and a small example.
+
 ### TO_CHANGELOG
+
+Full signature:
+
+```sql
+SELECT * FROM TO_CHANGELOG(
+    input                 => TABLE source_table [PARTITION BY key_col],
+    op                    => DESCRIPTOR(op_column_name),
+    op_mapping            => MAP['INSERT, UPDATE_AFTER', 'u', 'DELETE', 'd'],
+    produces_full_deletes => BOOLEAN
+)
+```
+
+#### A quick example
 
 ```sql
 SELECT * FROM TO_CHANGELOG(
@@ -106,6 +121,19 @@ That single row in the table is the end result of two changes: an insert (`cnt: 
 ```
 
 ### FROM_CHANGELOG
+
+Full signature:
+
+```sql
+SELECT * FROM FROM_CHANGELOG(
+    input          => TABLE source_table [PARTITION BY key_col [ORDER BY time_col]],
+    op             => DESCRIPTOR(op_column_name),
+    op_mapping     => MAP['c, r', 'INSERT', 'u', 'UPDATE_AFTER', 'd', 'DELETE'],
+    error_handling => 'FAIL' | 'SKIP'
+)
+```
+
+#### A quick example
 
 ```sql
 SELECT * FROM FROM_CHANGELOG(
@@ -147,31 +175,11 @@ I think they solve problems in two distinct major areas. This is how I view thin
 
 PS: A lot of times the error message means your query is broken and not the engine!
 
-## Full function signatures
+## What can these functions be used for? {#common-use-cases}
 
-The examples above only scratched the surface - both functions take a few more arguments. You can find the full parameter list in [the documentation](https://nightlies.apache.org/flink/flink-docs-master/docs/sql/reference/queries/changelog/).
+> Thanks to David Anderson, Martijn Visser, and Taku Suzuki, who shared some of the use cases below.
 
-```sql
-SELECT * FROM FROM_CHANGELOG(
-    input          => TABLE source_table [PARTITION BY key_col [ORDER BY time_col]],
-    op             => DESCRIPTOR(op_column_name),
-    op_mapping     => MAP['c, r', 'INSERT', 'u', 'UPDATE_AFTER', 'd', 'DELETE'],
-    error_handling => 'FAIL' | 'SKIP'
-)
-```
-
-```sql
-SELECT * FROM TO_CHANGELOG(
-    input                 => TABLE source_table [PARTITION BY key_col],
-    op                    => DESCRIPTOR(op_column_name),
-    op_mapping            => MAP['INSERT, UPDATE_AFTER', 'u', 'DELETE', 'd'],
-    produces_full_deletes => BOOLEAN
-)
-```
-
-## Unblocked Use Cases {#common-use-cases}
-
-Thanks to David Anderson, Martijn Visser, and Taku Suzuki, who shared some of the use cases below.
+As mentioned, these functions allow new functionality that wasn't possible before. I've gathered some examples that we'll go through.
 
 ### Writing an aggregation to an append-only sink
 
@@ -284,6 +292,8 @@ FROM FROM_CHANGELOG(
 Same result, one pipeline instead of two.
 
 There are more creative uses out there. If you've found one, I'd love to hear about it - send me an <a href="&#109;&#97;&#105;&#108;&#116;&#111;&#58;&#103;&#117;&#115;&#116;&#97;&#118;&#111;&#112;&#103;&#117;&#116;&#111;&#64;&#103;&#109;&#97;&#105;&#108;&#46;&#99;&#111;&#109;">email</a> or a message on [LinkedIn](https://www.linkedin.com/in/gustavo-demorais/).
+
+There are only some examples of things that are now possible. There are many more! Go play with it and find more!
 
 ## What's missing? {#whats-still-missing}
 
