@@ -166,7 +166,7 @@ op_mapping => MAP['INSERT', 'DELETE', 'DELETE', 'INSERT']
 
 Every real insert now deletes a row that was never there, and every real delete resurrects one that should be gone. Nothing crashes - your table is just silently wrong. 🧨
 
-## What are these new functions made for?
+## What problems do they solve?
 
 I think they solve problems in two distinct major areas. This is how I view things:
 
@@ -278,7 +278,7 @@ Of course, you don't have to split it into two pipelines - that's just handy whe
 
 ```sql
 INSERT INTO employee_state
-SELECT id, name, op, __deleted
+SELECT id, name
 FROM FROM_CHANGELOG(
     input      => TABLE employee_events PARTITION BY id,
     op_mapping => MAP[
