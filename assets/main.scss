@@ -7,6 +7,9 @@
   cursor: zoom-in;
   display: block;
   margin: 2.5em auto;
+  max-height: 600px;
+  width: auto;
+  max-width: 100%;
 }
 
 .heading-anchor {
@@ -46,5 +49,6 @@ h6:hover .heading-anchor {
 .lightbox-overlay img {
   max-width: 90%;
   max-height: 90%;
+  margin: 0;
   cursor: zoom-out;
 }

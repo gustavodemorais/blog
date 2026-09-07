@@ -1074,7 +1074,7 @@
     "gridSize": 20,
     "gridStep": 5,
     "gridModeEnabled": false,
-    "viewBackgroundColor": "#ffffff"
+    "viewBackgroundColor": "#fdfdfd"
   },
   "files": {}
 }
