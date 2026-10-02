@@ -216,6 +216,8 @@ SELECT * FROM TO_CHANGELOG((
 
 Now dedup is append-only and deterministic, no event time or watermarks involved at all - just keep in mind this holds for true exact duplicates. This is common after Flink jobs reprocess and leave exact duplicates in the sink.
 
+For more about deduplication, see the blog post by David Anderson on [Deduplicating Streams with Flink SQL](https://alpinegizmo.com/posts/deduplicating-streams-with-flink-sql/).
+
 ### Using an append-only built-in function on an updating stream
 
 Let's take LAG as an example: it's a function that gives you the previous row's value, but only accepts append-only tables. An updating view doesn't qualify, so Flink refuses to plan it. `TO_CHANGELOG` fixes that by turning the updates into explicit inserts first:
